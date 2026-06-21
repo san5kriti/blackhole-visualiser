@@ -32,7 +32,8 @@ const renderer = new THREE.WebGLRenderer({
 renderer.outputColorSpace = THREE.SRGBColorSpace
 renderer.toneMapping = THREE.NoToneMapping
 renderer.setClearColor(0x000006, 1)
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.65))
+const fixedPixelRatio = Math.min(window.devicePixelRatio, 1.3)
+renderer.setPixelRatio(fixedPixelRatio)
 renderer.setSize(window.innerWidth, window.innerHeight)
 
 const canvas = renderer.domElement
@@ -738,7 +739,6 @@ updateHUD()
 
 let frames = 0
 let lastFps = performance.now()
-let currentPixelRatio = renderer.getPixelRatio()
 
 function resize() {
   viewport.set(window.innerWidth, window.innerHeight)
@@ -748,18 +748,6 @@ function resize() {
   composer.setSize(viewport.x, viewport.y)
   renderer.getDrawingBufferSize(drawingSize)
   rayMarchMaterial.uniforms.resolution.value.copy(drawingSize)
-}
-
-function tunePixelRatio(fps) {
-  const dpr = Math.min(window.devicePixelRatio, 1.8)
-  let target = currentPixelRatio
-  if (fps < 42) target = Math.max(0.82, currentPixelRatio - 0.08)
-  if (fps > 58) target = Math.min(dpr, currentPixelRatio + 0.04)
-  if (Math.abs(target - currentPixelRatio) > 0.025) {
-    currentPixelRatio = target
-    renderer.setPixelRatio(currentPixelRatio)
-    resize()
-  }
 }
 
 window.addEventListener('resize', resize)
@@ -782,7 +770,6 @@ function animate() {
   const now = performance.now()
   if (now - lastFps > 650) {
     const fps = Math.round((frames * 1000) / (now - lastFps))
-    tunePixelRatio(fps)
     const distance = camera.position.length()
     const horizon = rayMarchMaterial.uniforms.rs.value
     const redshiftValue = 1 / Math.sqrt(Math.max(1 - horizon / Math.max(distance, horizon + 0.02), 0.01)) - 1
@@ -796,7 +783,7 @@ function animate() {
         <div><div style="font-size:9px;opacity:.58">REDSHIFT</div><div>z=${redshift}</div></div>
         <div><div style="font-size:9px;opacity:.58">DILATION</div><div>${dilation}x</div></div>
       </div>
-      <div style="opacity:.38;font-size:10px;margin-top:5px">CAMERA R=${distance.toFixed(2)} / DPR ${currentPixelRatio.toFixed(2)}</div>
+      <div style="opacity:.38;font-size:10px;margin-top:5px">CAMERA R=${distance.toFixed(2)} / DPR ${fixedPixelRatio.toFixed(2)}</div>
     `
     frames = 0
     lastFps = now
@@ -812,5 +799,12 @@ createLoadingScreen().then(() => {
   rayMarchMaterial.uniforms.cameraFov.value = camera.fov
   renderer.getDrawingBufferSize(drawingSize)
   rayMarchMaterial.uniforms.resolution.value.copy(drawingSize)
+
+  // warm up the composer/shader before user sees the first live frames
+  for (let i = 0; i < 4; i++) {
+    rayMarchMaterial.uniforms.time.value = i * 0.025
+    composer.render()
+  }
+
   animate()
 })
