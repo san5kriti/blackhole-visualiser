@@ -11,6 +11,8 @@ import {
 } from 'postprocessing'
 import GUI from 'lil-gui'
 
+import { createLoadingScreen } from './loading.js'
+
 const app = document.getElementById('app')
 const viewport = new THREE.Vector2()
 const drawingSize = new THREE.Vector2()
@@ -429,6 +431,8 @@ const rayMarchMaterial = new THREE.ShaderMaterial({
 const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), rayMarchMaterial)
 quad.frustumCulled = false
 scene.add(quad)
+// force shader compile immediately so GPU doesn't stutter on first real frame
+renderer.compile(scene, camera)
 
 const bloomEffect = new BloomEffect({
   intensity: 1.35,
@@ -518,7 +522,7 @@ bottomPill.style.cssText = `
   pointer-events: none;
   text-transform: uppercase;
 `
-bottomPill.textContent = 'Scientific approximation: moving null geodesic lens'
+bottomPill.textContent = '⚠ WARNING: CROSSING THE PHOTON SPHERE IS A ONE-WAY TRIP'
 document.body.appendChild(bottomPill)
 
 function getPhysics(rs) {
@@ -543,17 +547,90 @@ function getPhysics(rs) {
     evaporationYears
   }
 }
+// ---- SOCIAL LINKS ----
+const socials = document.createElement('div')
+socials.style.cssText = `
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: all;
+`
+
+const links = [
+  { label: '⬡ PORTFOLIO', href: 'https://sanskritishelke.vercel.app' },
+  { label: '⬡ LINKEDIN', href: 'https://linkedin.com/in/sanskriti-shelke' },
+  { label: '⬡ GITHUB', href: 'https://github.com/san5kriti' },
+  { label: '⬡ EMAIL', href: 'mailto:sanskriti@example.com' },
+]
+
+links.forEach(({ label, href }) => {
+  const a = document.createElement('a')
+  a.href = href
+  a.target = '_blank'
+  a.textContent = label
+  a.style.cssText = `
+    color: rgba(255, 211, 166, 0.72);
+    background: rgba(5, 7, 9, 0.45);
+    border: 1px solid rgba(255, 160, 94, 0.25);
+    border-radius: 999px;
+    padding: 7px 18px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-decoration: none;
+    text-align: center;
+    transition: all 0.2s ease;
+    display: block;
+  `
+  a.addEventListener('mouseenter', () => {
+    a.style.background = 'rgba(122, 47, 20, 0.5)'
+    a.style.borderColor = 'rgba(255, 160, 94, 0.6)'
+    a.style.color = 'rgba(255, 220, 180, 0.95)'
+    a.style.boxShadow = '0 0 18px rgba(255, 120, 50, 0.2)'
+  })
+  a.addEventListener('mouseleave', () => {
+    a.style.background = 'rgba(5, 7, 9, 0.45)'
+    a.style.borderColor = 'rgba(255, 160, 94, 0.25)'
+    a.style.color = 'rgba(255, 211, 166, 0.72)'
+    a.style.boxShadow = 'none'
+  })
+  socials.appendChild(a)
+})
+
+document.body.appendChild(socials)
+
+// ---- TITLE CARD ----
+const titleCard = document.createElement('div')
+titleCard.style.cssText = `
+  position: fixed;
+  bottom: 62px;
+  left: 18px;
+  color: rgba(255, 211, 166, 0.5);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 9px;
+  letter-spacing: 0.28em;
+  pointer-events: none;
+  line-height: 1.8;
+`
+titleCard.innerHTML = `
+  <div>RENDERED BY SANSKRITI SHELKE</div>
+  <div style="opacity:0.5">∿ null geodesics don't lie · durham university</div>
+`
+document.body.appendChild(titleCard)
 
 function updateHUD() {
   const p = getPhysics(rayMarchMaterial.uniforms.rs.value)
   hud.innerHTML = `
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
       <div style="width:42px;height:18px;border-top:2px solid rgba(235,237,230,.78);border-bottom:2px solid rgba(235,237,230,.38);border-radius:50%;transform:rotate(-10deg)"></div>
-      <div style="font-size:18px;letter-spacing:.34em">BLACKHOLE SIMULATION</div>
+      <div style="font-size:18px;letter-spacing:.34em">GARGANTUA.exe</div>
     </div>
-    <div style="font-size:10px;opacity:.62">RELATIVISTIC KERNEL ACTIVE</div>
+    <div style="font-size:10px;opacity:.62">// you are not supposed to be here</div>
     <div style="font-size:9px;opacity:.35;margin-bottom:10px">SYNC_LOCK 0x57 / THIN DISK TRANSFER</div>
-    <div style="display:inline-block;border:1px solid rgba(104,238,255,.55);padding:2px 8px;color:rgba(210,248,255,.88);font-size:10px;letter-spacing:.16em">METRIC: SCHWARZSCHILD + FRAME-DRAG APPROX</div>
+    <div style="display:inline-block;border:1px solid rgba(104,238,255,.55);padding:2px 8px;color:rgba(210,248,255,.88);font-size:10px;letter-spacing:.16em">[ KERR METRIC · a/M = ${rayMarchMaterial.uniforms.spin.value.toFixed(2)} · BOYER-LINDQUIST COORDS ]</div>
   `
   sciencePanel.innerHTML = `
     <div style="display:grid;grid-template-columns:1fr auto;gap:4px 16px">
@@ -594,6 +671,27 @@ const params = {
 }
 
 const gui = new GUI({ title: 'Black Hole Observatory' })
+gui.domElement.style.cssText = `
+  position: fixed;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --background-color: rgba(3, 4, 8, 0.55);
+  --text-color: rgba(255, 211, 166, 0.85);
+  --title-background-color: rgba(122, 47, 20, 0.4);
+  --title-text-color: rgba(255, 220, 180, 0.95);
+  --widget-color: rgba(40, 20, 8, 0.8);
+  --hover-color: rgba(80, 35, 10, 0.8);
+  --focus-color: rgba(255, 120, 50, 0.4);
+  --number-color: rgba(255, 200, 130, 0.9);
+  --string-color: rgba(255, 180, 100, 0.9);
+  border: 1px solid rgba(255, 160, 94, 0.2);
+  border-radius: 2px;
+  box-shadow: 0 0 40px rgba(255, 100, 30, 0.08), inset 0 0 20px rgba(0,0,0,0.4);
+  backdrop-filter: blur(8px);
+  min-width: 220px;
+`
 gui.add(params, 'mass', 0.16, 0.72, 0.005).name('Mass').onChange((v) => {
   rayMarchMaterial.uniforms.rs.value = v
   rayMarchMaterial.uniforms.diskInner.value = v * 1.16
@@ -705,4 +803,14 @@ function animate() {
   }
 }
 
-animate()
+createLoadingScreen().then(() => {
+  // force camera matrix update before first frame
+  camera.updateMatrixWorld(true)
+  controls.update()
+  rayMarchMaterial.uniforms.cameraPos.value.copy(camera.position)
+  rayMarchMaterial.uniforms.cameraMatrix.value.copy(camera.matrixWorld)
+  rayMarchMaterial.uniforms.cameraFov.value = camera.fov
+  renderer.getDrawingBufferSize(drawingSize)
+  rayMarchMaterial.uniforms.resolution.value.copy(drawingSize)
+  animate()
+})

@@ -24,3 +24,32 @@ canvas {
   width: 100vw !important;
   height: 100vh !important;
 }
+
+.lil-gui .title {
+  letter-spacing: 0.2em;
+  font-size: 10px;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(255, 160, 94, 0.15) !important;
+  padding: 10px 8px !important;
+}
+
+.lil-gui .controller {
+  border-top: 1px solid rgba(255, 160, 94, 0.06) !important;
+  padding: 4px 8px !important;
+}
+
+.lil-gui .controller .name {
+  font-size: 9px !important;
+  letter-spacing: 0.18em !important;
+  text-transform: uppercase !important;
+  opacity: 0.7;
+}
+
+.lil-gui input[type=range] {
+  accent-color: rgba(255, 140, 60, 0.9) !important;
+}
+
+.lil-gui .display {
+  font-size: 10px !important;
+  color: rgba(255, 200, 130, 0.9) !important;
+}
