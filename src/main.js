@@ -42,7 +42,7 @@ controls.enableDamping = true
 controls.dampingFactor = 0.045
 controls.enablePan = false
 controls.autoRotate = true
-controls.autoRotateSpeed = 0.08
+controls.autoRotateSpeed = 0.13
 controls.minDistance = 1.65
 controls.maxDistance = 18
 controls.target.set(0, 0, 0)
@@ -76,13 +76,13 @@ function makeStarTexture() {
     ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2)
   }
 
-  const starCount = 30000
+  const starCount = 90000
   for (let i = 0; i < starCount; i++) {
     const x = Math.random() * size
     const y = Math.random() * size * 0.5
-    const luminosity = Math.pow(Math.random(), 4.5)
-    const radius = 0.25 + luminosity * 1.8
-    const alpha = 0.25 + luminosity * 0.75
+    const luminosity = Math.pow(Math.random(), 5.8)
+    const radius = 0.08 + luminosity * 0.95
+    const alpha = 0.18 + luminosity * 0.82
     const type = Math.random()
     const color = type < 0.18 ? [255, 210, 155] : type < 0.48 ? [168, 196, 255] : [255, 255, 255]
 
@@ -91,9 +91,9 @@ function makeStarTexture() {
     ctx.arc(x, y, radius, 0, Math.PI * 2)
     ctx.fill()
 
-    if (luminosity > 0.78) {
+    if (luminosity > 0.86) {
       ctx.strokeStyle = `rgba(${color[0]},${color[1]},${color[2]},${alpha * 0.25})`
-      ctx.lineWidth = 0.6
+      ctx.lineWidth = 0.45
       ctx.beginPath()
       ctx.moveTo(x - radius * 5, y)
       ctx.lineTo(x + radius * 5, y)
@@ -128,12 +128,14 @@ const rayMarchMaterial = new THREE.ShaderMaterial({
     starTexture: { value: starTexture },
     rs: { value: 0.32 },
     spin: { value: 0.62 },
-    diskSpeed: { value: 1.0 },
+    diskSpeed: { value: 1.35 },
     diskInner: { value: 0.37 },
     diskOuter: { value: 3.6 },
     diskTilt: { value: 0.16 },
     jetPower: { value: 0.55 },
-    starWarp: { value: 1.0 },
+    starWarp: { value: 1.45 },
+    starMotion: { value: 1.35 },
+    tracerIntensity: { value: 1.35 },
     exposure: { value: 1.18 },
     quality: { value: 1.0 }
   },
@@ -159,6 +161,8 @@ const rayMarchMaterial = new THREE.ShaderMaterial({
     uniform float diskTilt;
     uniform float jetPower;
     uniform float starWarp;
+    uniform float starMotion;
+    uniform float tracerIntensity;
     uniform float exposure;
     uniform float quality;
 
@@ -204,14 +208,21 @@ const rayMarchMaterial = new THREE.ShaderMaterial({
       dir = normalize(dir);
       float u = 0.5 + atan(dir.z, dir.x) / (2.0 * PI);
       float v = 0.5 - asin(clamp(dir.y, -1.0, 1.0)) / PI;
+      float drift = time * 0.0035 * starMotion;
+      float shear = lensEnergy * starMotion;
+      u += drift + sin(v * 18.0 + time * 0.18) * shear * 0.0025;
+      v += cos(u * 13.0 - time * 0.12) * shear * 0.0012;
+
       vec3 stars = texture2D(starTexture, vec2(u, v)).rgb;
       vec3 starTrail = vec3(0.0);
 
-      float smear = clamp(lensEnergy * 0.018, 0.0, 0.026);
+      float smear = clamp(lensEnergy * (0.018 + starMotion * 0.018), 0.0, 0.055);
       starTrail += texture2D(starTexture, vec2(u + smear, v)).rgb;
       starTrail += texture2D(starTexture, vec2(u - smear, v)).rgb;
       starTrail += texture2D(starTexture, vec2(u + smear * 2.0, v)).rgb * 0.45;
       starTrail += texture2D(starTexture, vec2(u - smear * 2.0, v)).rgb * 0.45;
+      starTrail += texture2D(starTexture, vec2(u + smear * 3.6, v + smear * 0.18)).rgb * 0.18;
+      starTrail += texture2D(starTexture, vec2(u - smear * 3.6, v - smear * 0.18)).rgb * 0.18;
 
       float milky = pow(max(0.0, 1.0 - abs(dir.y + 0.08) * 4.0), 2.2);
       vec2 bandUv = vec2(u * 12.0 + time * 0.003, v * 8.0);
@@ -219,7 +230,48 @@ const rayMarchMaterial = new THREE.ShaderMaterial({
       vec3 band = mix(vec3(0.03, 0.045, 0.08), vec3(0.24, 0.17, 0.10), dust);
 
       float glint = pow(max(max(stars.r, stars.g), stars.b), 7.0) * lensEnergy;
-      return stars * (0.9 + lensEnergy * 0.55) + starTrail * lensEnergy * 0.24 + band * milky * 0.38 + vec3(0.9, 0.72, 0.48) * glint;
+      return stars * (0.9 + lensEnergy * 0.55) + starTrail * lensEnergy * (0.18 + starMotion * 0.24) + band * milky * 0.38 + vec3(0.9, 0.72, 0.48) * glint;
+    }
+
+    vec3 photonOrbitTracers(vec2 uv, float minR, float lensEnergy) {
+      float fovScale = tan(radians(cameraFov) * 0.5);
+      float cameraDistance = max(length(cameraPos), 0.25);
+      float photonScreen = clamp((rs * 2.58 / cameraDistance) / (2.0 * fovScale), 0.045, 0.34);
+      float radius = length(uv);
+      float angle = atan(uv.y, uv.x);
+      float nearPhoton = exp(-pow((minR - rs * 2.58) / max(rs * 0.9, 0.001), 2.0));
+
+      vec3 glow = vec3(0.0);
+      float ringCore = exp(-pow((radius - photonScreen) / max(photonScreen * 0.035, 0.002), 2.0));
+      float ringOuter = exp(-pow((radius - photonScreen * 1.22) / max(photonScreen * 0.07, 0.003), 2.0));
+      float dash = smoothstep(0.62, 1.0, fract(angle * 18.0 + radius * 33.0 - time * starMotion * 0.7));
+      glow += vec3(1.8, 1.55, 1.18) * ringCore * (0.14 + lensEnergy * 0.18);
+      glow += vec3(0.62, 0.78, 1.35) * ringOuter * dash * 0.13 * starMotion;
+
+      for (int i = 0; i < 64; i++) {
+        float fi = float(i);
+        float seed = hash12(vec2(fi, fi * 2.17));
+        float lane = mix(0.82, 1.42, hash12(vec2(fi * 3.1, 8.2)));
+        float orbitRadius = photonScreen * lane;
+        float speed = mix(0.24, 1.85, seed) * (hash12(vec2(fi, 5.0)) < 0.5 ? -1.0 : 1.0);
+        float phase = fi * 2.399963 + time * speed * starMotion;
+        float angularDistance = abs(atan(sin(angle - phase), cos(angle - phase)));
+        float radialDistance = radius - orbitRadius;
+        float point = exp(-(radialDistance * radialDistance) / max(0.000012, photonScreen * photonScreen * 0.0012));
+        point *= exp(-(angularDistance * angularDistance) / mix(0.000035, 0.00045, seed));
+
+        float tailPhase = angle - phase + speed * 0.045;
+        float tailDistance = abs(atan(sin(tailPhase), cos(tailPhase)));
+        float tail = exp(-(radialDistance * radialDistance) / max(0.000018, photonScreen * photonScreen * 0.0017));
+        tail *= smoothstep(0.105, 0.0, tailDistance) * smoothstep(0.0, 0.028, tailDistance);
+
+        vec3 starColor = mix(vec3(0.95, 0.86, 0.72), vec3(0.42, 0.85, 1.55), hash12(vec2(fi, 9.7)));
+        starColor = mix(starColor, vec3(1.0, 0.34, 0.62), step(0.92, seed));
+        glow += starColor * (point * 2.2 + tail * 0.42) * (0.35 + nearPhoton + lensEnergy * 0.25);
+      }
+
+      float falloff = smoothstep(0.46, 0.02, abs(radius - photonScreen));
+      return glow * tracerIntensity * falloff;
     }
 
     vec4 diskSurfaceEmission(vec3 p, vec3 rd, float imageOrder) {
@@ -357,6 +409,7 @@ const rayMarchMaterial = new THREE.ShaderMaterial({
 
       float shadowEdge = absorbed ? 0.0 : smoothstep(rs * 0.92, rs * 2.45, minR);
       vec3 color = accumulated + background * shadowEdge + ringColor;
+      color += photonOrbitTracers(uv, minR, lensEnergy);
 
       float chroma = length(uv) * (0.018 + lensEnergy * 0.008);
       color.r *= 1.0 + chroma;
@@ -465,7 +518,7 @@ bottomPill.style.cssText = `
   pointer-events: none;
   text-transform: uppercase;
 `
-bottomPill.textContent = 'Scientific approximation: null geodesic raymarch'
+bottomPill.textContent = 'Scientific approximation: moving null geodesic lens'
 document.body.appendChild(bottomPill)
 
 function getPhysics(rs) {
@@ -514,7 +567,7 @@ function updateHUD() {
     </div>
     <div style="height:1px;background:rgba(235,237,230,.12);margin:12px 0"></div>
     <div style="opacity:.55;font-size:10px">TRANSFER MODEL</div>
-    <div style="opacity:.38;font-size:10px;line-height:1.6">Null-ray bending, thin accretion disk crossings, Doppler beaming, gravitational redshift, photon-ring emphasis.</div>
+    <div style="opacity:.38;font-size:10px;line-height:1.6">Null-ray bending, thin accretion disk crossings, Doppler beaming, gravitational redshift, animated photon-sphere light paths.</div>
     <svg viewBox="0 0 320 78" width="100%" height="78" style="margin-top:8px;opacity:.78">
       <polyline points="8,58 58,55 108,51 158,49 208,48 250,49 284,58 306,70" fill="none" stroke="rgba(57,235,255,.95)" stroke-width="2"/>
       <line x1="210" y1="10" x2="210" y2="70" stroke="rgba(235,237,230,.24)" stroke-dasharray="2 4"/>
@@ -532,6 +585,8 @@ const params = {
   diskTilt: rayMarchMaterial.uniforms.diskTilt.value,
   jetPower: rayMarchMaterial.uniforms.jetPower.value,
   lensStars: rayMarchMaterial.uniforms.starWarp.value,
+  starMotion: rayMarchMaterial.uniforms.starMotion.value,
+  horizonTracers: rayMarchMaterial.uniforms.tracerIntensity.value,
   quality: 1.0,
   bloom: bloomEffect.intensity,
   exposure: rayMarchMaterial.uniforms.exposure.value,
@@ -561,6 +616,12 @@ gui.add(params, 'jetPower', 0, 1.8, 0.01).name('Jet power').onChange((v) => {
 })
 gui.add(params, 'lensStars', 0, 2.5, 0.01).name('Star lensing').onChange((v) => {
   rayMarchMaterial.uniforms.starWarp.value = v
+})
+gui.add(params, 'starMotion', 0, 3.5, 0.01).name('Star motion').onChange((v) => {
+  rayMarchMaterial.uniforms.starMotion.value = v
+})
+gui.add(params, 'horizonTracers', 0, 3.0, 0.01).name('Horizon riders').onChange((v) => {
+  rayMarchMaterial.uniforms.tracerIntensity.value = v
 })
 gui.add(params, 'quality', 0.55, 1.35, 0.01).name('Ray quality').onChange((v) => {
   rayMarchMaterial.uniforms.quality.value = v
