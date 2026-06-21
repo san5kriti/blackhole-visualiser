@@ -205,6 +205,13 @@ const rayMarchMaterial = new THREE.ShaderMaterial({
       float u = 0.5 + atan(dir.z, dir.x) / (2.0 * PI);
       float v = 0.5 - asin(clamp(dir.y, -1.0, 1.0)) / PI;
       vec3 stars = texture2D(starTexture, vec2(u, v)).rgb;
+      vec3 starTrail = vec3(0.0);
+
+      float smear = clamp(lensEnergy * 0.018, 0.0, 0.026);
+      starTrail += texture2D(starTexture, vec2(u + smear, v)).rgb;
+      starTrail += texture2D(starTexture, vec2(u - smear, v)).rgb;
+      starTrail += texture2D(starTexture, vec2(u + smear * 2.0, v)).rgb * 0.45;
+      starTrail += texture2D(starTexture, vec2(u - smear * 2.0, v)).rgb * 0.45;
 
       float milky = pow(max(0.0, 1.0 - abs(dir.y + 0.08) * 4.0), 2.2);
       vec2 bandUv = vec2(u * 12.0 + time * 0.003, v * 8.0);
@@ -212,10 +219,10 @@ const rayMarchMaterial = new THREE.ShaderMaterial({
       vec3 band = mix(vec3(0.03, 0.045, 0.08), vec3(0.24, 0.17, 0.10), dust);
 
       float glint = pow(max(max(stars.r, stars.g), stars.b), 7.0) * lensEnergy;
-      return stars * (0.9 + lensEnergy * 0.8) + band * milky * 0.38 + vec3(0.9, 0.72, 0.48) * glint;
+      return stars * (0.9 + lensEnergy * 0.55) + starTrail * lensEnergy * 0.24 + band * milky * 0.38 + vec3(0.9, 0.72, 0.48) * glint;
     }
 
-    vec4 diskEmission(vec3 p, vec3 rd) {
+    vec4 diskSurfaceEmission(vec3 p, vec3 rd, float imageOrder) {
       p.yz = rot(diskTilt) * p.yz;
 
       float r = length(p.xz);
@@ -223,36 +230,41 @@ const rayMarchMaterial = new THREE.ShaderMaterial({
 
       float angle = atan(p.z, p.x);
       float invR = inversesqrt(max(r, 0.04));
-      float orbital = diskSpeed * (0.42 + spin * 0.34) * invR;
+      float orbital = diskSpeed * (0.58 + spin * 0.28) * invR;
       float flow = angle - time * orbital;
 
-      float spiral = sin(flow * 5.0 + pow(r, 1.35) * 5.8 - time * 0.55);
-      float turbulence = fbm(vec2(flow * 2.4 + spiral * 0.18, r * 3.8 - time * 0.06));
-      turbulence += 0.55 * fbm(vec2(flow * 7.6 + 5.0, r * 10.0 + time * 0.08));
-      turbulence = clamp(turbulence * 0.68, 0.0, 1.0);
+      float spiral = sin(flow * 7.0 + pow(r, 1.18) * 10.5 - time * 0.55);
+      float turbulence = fbm(vec2(flow * 3.2 + spiral * 0.22, r * 5.2 - time * 0.08));
+      turbulence += 0.42 * fbm(vec2(flow * 14.0 + 5.0, r * 18.0 + time * 0.08));
+      turbulence = clamp(turbulence * 0.74, 0.0, 1.0);
 
       float normalizedRadius = (r - diskInner) / max(diskOuter - diskInner, 0.001);
-      float heat = pow(1.0 - normalizedRadius, 1.8);
-      vec3 whiteHot = vec3(3.2, 2.55, 1.68);
-      vec3 amber = vec3(1.8, 0.62, 0.11);
-      vec3 ember = vec3(0.52, 0.075, 0.018);
+      float heat = pow(1.0 - normalizedRadius, 2.15);
+      vec3 whiteHot = vec3(4.0, 3.35, 2.15);
+      vec3 amber = vec3(2.45, 0.84, 0.14);
+      vec3 ember = vec3(0.55, 0.075, 0.016);
       vec3 color = mix(ember, amber, smoothstep(0.15, 0.95, heat));
       color = mix(color, whiteHot, smoothstep(0.62, 1.0, heat));
 
-      float azimuth = p.x / max(r, 0.001);
-      float doppler = exp(azimuth * (1.15 + spin * 1.25));
-      color *= clamp(doppler, 0.26, 4.1);
-      color.b += max(azimuth, 0.0) * 0.36;
+      vec3 tangent = normalize(vec3(-p.z, 0.0, p.x));
+      float beta = clamp((0.34 + 0.22 * spin) * invR, 0.05, 0.62);
+      float los = dot(normalize(-rd), tangent);
+      float gamma = inversesqrt(max(1.0 - beta * beta, 0.08));
+      float doppler = 1.0 / max(gamma * (1.0 - beta * los), 0.08);
+      float gravitational = sqrt(max(1.0 - rs / max(r, rs + 0.001), 0.025));
+      float spectralShift = doppler * gravitational;
+      color *= pow(clamp(doppler, 0.2, 5.2), 3.0) * pow(gravitational, 1.65);
+      color = mix(color * vec3(1.0, 0.6, 0.32), color * vec3(0.66, 0.92, 1.35), smoothstep(0.82, 1.55, spectralShift));
 
       float flare = pow(max(0.0, sin(flow * 11.0 + r * 4.0 - time * 2.1)), 9.0);
-      float verticalSigma = 0.0028 + r * 0.0025;
-      float thickness = exp(-(p.y * p.y) / verticalSigma);
-      float radialFeather = smoothstep(diskInner, diskInner + 0.12, r) * (1.0 - smoothstep(diskOuter * 0.82, diskOuter, r));
-      float opacity = thickness * radialFeather * (0.24 + turbulence * 0.95 + flare * 0.65);
+      float radialFeather = smoothstep(diskInner, diskInner + 0.18, r) * (1.0 - smoothstep(diskOuter * 0.78, diskOuter, r));
+      float lane = smoothstep(0.16, 0.9, turbulence) * smoothstep(0.0, 0.8, 1.0 - normalizedRadius);
+      float opacity = radialFeather * (0.18 + lane * 0.86 + flare * 0.5);
+      opacity *= mix(1.0, 0.42, clamp(imageOrder, 0.0, 1.0));
 
-      float extinction = smoothstep(0.0, 0.04, abs(p.y)) * 0.2;
-      color *= 0.62 + turbulence * 1.45 + flare * 1.8 - extinction;
-      color *= 1.0 + 0.08 * sin(time * 1.4 + r * 7.0);
+      color *= 0.52 + turbulence * 1.7 + flare * 1.55;
+      color *= 1.0 + 0.07 * sin(time * 1.4 + r * 7.0);
+      color *= mix(1.0, 0.56, clamp(imageOrder, 0.0, 1.0));
 
       return vec4(max(color, vec3(0.0)), clamp(opacity, 0.0, 1.0));
     }
@@ -281,6 +293,7 @@ const rayMarchMaterial = new THREE.ShaderMaterial({
       float transmittance = 1.0;
       float minR = 1e6;
       float lensEnergy = 0.0;
+      int diskImages = 0;
       bool absorbed = false;
 
       for (int i = 0; i < MAX_STEPS; i++) {
@@ -297,23 +310,41 @@ const rayMarchMaterial = new THREE.ShaderMaterial({
         float stepSize = mix(0.024, 0.16, smoothstep(rs * 1.4, 8.0, r));
         stepSize *= mix(0.75, 1.3, clamp(quality, 0.55, 1.35));
 
+        vec3 previousRo = ro;
         vec3 rhat = ro / max(r, 0.0001);
         float gravity = (1.32 + spin * 0.32) * rs / max(r * r, 0.001);
         vec3 frameDrag = vec3(-rhat.z, 0.0, rhat.x) * spin * rs * 0.028 / max(r * r, 0.001);
         rd = normalize(rd - rhat * gravity * stepSize + frameDrag * stepSize);
         lensEnergy += nearField * stepSize * 0.15;
 
-        vec4 disk = diskEmission(ro, rd);
-        if (disk.a > 0.002) {
-          accumulated += disk.rgb * disk.a * transmittance * 0.72;
-          transmittance *= max(0.0, 1.0 - disk.a * 0.19);
+        vec3 nextRo = ro + rd * stepSize;
+        vec3 previousDisk = previousRo;
+        vec3 nextDisk = nextRo;
+        previousDisk.yz = rot(diskTilt) * previousDisk.yz;
+        nextDisk.yz = rot(diskTilt) * nextDisk.yz;
+
+        if (previousDisk.y * nextDisk.y <= 0.0 && abs(previousDisk.y - nextDisk.y) > 0.00001) {
+          float crossT = clamp(previousDisk.y / (previousDisk.y - nextDisk.y), 0.0, 1.0);
+          vec3 diskHit = mix(previousRo, nextRo, crossT);
+          vec4 disk = diskSurfaceEmission(diskHit, rd, float(diskImages));
+          if (disk.a > 0.002) {
+            float imageWeight = diskImages == 0 ? 0.92 : 0.46;
+            float absorptionOrder = diskImages == 0 ? 0.0 : 1.0;
+            accumulated += disk.rgb * disk.a * transmittance * imageWeight;
+            transmittance *= max(0.0, 1.0 - disk.a * mix(0.16, 0.08, absorptionOrder));
+            diskImages++;
+          }
         }
+
+        float diskRadius = length(previousDisk.xz);
+        float corona = exp(-abs(previousDisk.y) * 18.0) * smoothstep(diskInner * 0.8, diskOuter, diskRadius) * (1.0 - smoothstep(diskOuter * 0.95, diskOuter * 1.7, diskRadius));
+        accumulated += vec3(1.0, 0.42, 0.08) * corona * transmittance * stepSize * 0.08;
 
         vec3 jet = jetEmission(ro);
         accumulated += jet * transmittance * stepSize * 0.19;
 
         if (transmittance < 0.004) break;
-        ro += rd * stepSize;
+        ro = nextRo;
       }
 
       vec3 background = absorbed ? vec3(0.0) : sampleStars(rd, clamp(lensEnergy * starWarp, 0.0, 1.8)) * transmittance;
@@ -370,16 +401,16 @@ composer.addPass(new EffectPass(camera, bloomEffect, toneMappingEffect, vignette
 const hud = document.createElement('div')
 hud.style.cssText = `
   position: fixed;
-  top: 18px;
-  left: 18px;
-  color: rgba(255, 205, 132, 0.86);
+  top: 30px;
+  left: 28px;
+  color: rgba(235, 237, 230, 0.78);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 11px;
-  line-height: 1.85;
+  line-height: 1.8;
   pointer-events: none;
-  text-shadow: 0 0 14px rgba(255, 129, 36, 0.55);
-  letter-spacing: 0.08em;
-  max-width: min(360px, calc(100vw - 36px));
+  text-shadow: 0 0 14px rgba(255, 255, 255, 0.16);
+  letter-spacing: 0.16em;
+  max-width: min(430px, calc(100vw - 56px));
 `
 document.body.appendChild(hud)
 
@@ -388,16 +419,54 @@ fpsDiv.style.cssText = `
   position: fixed;
   top: 18px;
   right: 18px;
-  color: rgba(255, 205, 132, 0.64);
+  color: rgba(235, 237, 230, 0.78);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 11px;
   line-height: 1.65;
   pointer-events: none;
-  text-shadow: 0 0 14px rgba(255, 129, 36, 0.45);
+  text-shadow: 0 0 14px rgba(255, 255, 255, 0.16);
   letter-spacing: 0.16em;
   text-align: right;
 `
 document.body.appendChild(fpsDiv)
+
+const sciencePanel = document.createElement('div')
+sciencePanel.style.cssText = `
+  position: fixed;
+  right: 18px;
+  top: 118px;
+  width: min(350px, calc(100vw - 36px));
+  color: rgba(235, 237, 230, 0.72);
+  background: rgba(5, 7, 9, 0.32);
+  border: 1px solid rgba(235, 237, 230, 0.11);
+  box-shadow: 0 0 32px rgba(255, 116, 34, 0.08);
+  padding: 14px 14px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  line-height: 1.75;
+  pointer-events: none;
+  letter-spacing: 0.09em;
+`
+document.body.appendChild(sciencePanel)
+
+const bottomPill = document.createElement('div')
+bottomPill.style.cssText = `
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  color: rgba(255, 211, 166, 0.72);
+  background: rgba(122, 47, 20, 0.34);
+  border: 1px solid rgba(255, 160, 94, 0.32);
+  border-radius: 999px;
+  padding: 10px 24px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  pointer-events: none;
+  text-transform: uppercase;
+`
+bottomPill.textContent = 'Scientific approximation: null geodesic raymarch'
+document.body.appendChild(bottomPill)
 
 function getPhysics(rs) {
   const c = 299792458
@@ -425,15 +494,33 @@ function getPhysics(rs) {
 function updateHUD() {
   const p = getPhysics(rayMarchMaterial.uniforms.rs.value)
   hud.innerHTML = `
-    <div style="font-size:10px;letter-spacing:0.28em;opacity:0.7;margin-bottom:2px">SCHWARZSCHILD-KERR LENS</div>
-    <div style="font-size:10px;opacity:0.44;margin-bottom:7px">RELATIVISTIC RAYMARCH KERNEL</div>
-    <div>MASS&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${p.solarMasses.toExponential(2)} M&#9737;</div>
-    <div>EVENT R&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${p.rsSI.toExponential(2)} m</div>
-    <div>PHOTON R&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${p.photonSphere.toExponential(2)} m</div>
-    <div>AREA&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${p.area.toExponential(2)} m&sup2;</div>
-    <div>ENTROPY&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${p.entropy.toExponential(2)}</div>
-    <div>HAWKING T&nbsp;&nbsp;&nbsp;${p.hawkingTemperature.toExponential(2)} K</div>
-    <div>LIFETIME&nbsp;&nbsp;&nbsp;&nbsp;${p.evaporationYears.toExponential(2)} yr</div>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
+      <div style="width:42px;height:18px;border-top:2px solid rgba(235,237,230,.78);border-bottom:2px solid rgba(235,237,230,.38);border-radius:50%;transform:rotate(-10deg)"></div>
+      <div style="font-size:18px;letter-spacing:.34em">BLACKHOLE SIMULATION</div>
+    </div>
+    <div style="font-size:10px;opacity:.62">RELATIVISTIC KERNEL ACTIVE</div>
+    <div style="font-size:9px;opacity:.35;margin-bottom:10px">SYNC_LOCK 0x57 / THIN DISK TRANSFER</div>
+    <div style="display:inline-block;border:1px solid rgba(104,238,255,.55);padding:2px 8px;color:rgba(210,248,255,.88);font-size:10px;letter-spacing:.16em">METRIC: SCHWARZSCHILD + FRAME-DRAG APPROX</div>
+  `
+  sciencePanel.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr auto;gap:4px 16px">
+      <div>HORIZON AREA</div><div>${p.area.toExponential(2)} m&sup2;</div>
+      <div>ENTROPY S/K_B</div><div>${p.entropy.toExponential(2)}</div>
+      <div>T_H</div><div>${p.hawkingTemperature.toExponential(2)} K</div>
+      <div>T_EVAP</div><div>${p.evaporationYears.toExponential(2)} yr</div>
+      <div>MASS</div><div>${p.solarMasses.toExponential(2)} M_sun</div>
+      <div>R_S</div><div>${p.rsSI.toExponential(2)} m</div>
+      <div>PHOTON SPHERE</div><div>${p.photonSphere.toExponential(2)} m</div>
+    </div>
+    <div style="height:1px;background:rgba(235,237,230,.12);margin:12px 0"></div>
+    <div style="opacity:.55;font-size:10px">TRANSFER MODEL</div>
+    <div style="opacity:.38;font-size:10px;line-height:1.6">Null-ray bending, thin accretion disk crossings, Doppler beaming, gravitational redshift, photon-ring emphasis.</div>
+    <svg viewBox="0 0 320 78" width="100%" height="78" style="margin-top:8px;opacity:.78">
+      <polyline points="8,58 58,55 108,51 158,49 208,48 250,49 284,58 306,70" fill="none" stroke="rgba(57,235,255,.95)" stroke-width="2"/>
+      <line x1="210" y1="10" x2="210" y2="70" stroke="rgba(235,237,230,.24)" stroke-dasharray="2 4"/>
+      <text x="8" y="14" fill="rgba(235,237,230,.48)" font-size="9">HAWKING SPECTRUM</text>
+      <text x="248" y="18" fill="rgba(235,237,230,.36)" font-size="8">peak</text>
+    </svg>
   `
 }
 
@@ -539,12 +626,18 @@ function animate() {
     tunePixelRatio(fps)
     const distance = camera.position.length()
     const horizon = rayMarchMaterial.uniforms.rs.value
-    const redshift = (1 / Math.sqrt(Math.max(1 - horizon / Math.max(distance, horizon + 0.02), 0.01)) - 1).toFixed(3)
+    const redshiftValue = 1 / Math.sqrt(Math.max(1 - horizon / Math.max(distance, horizon + 0.02), 0.01)) - 1
+    const redshift = redshiftValue.toFixed(3)
+    const dilation = (1 / (1 + redshiftValue)).toFixed(3)
     fpsDiv.innerHTML = `
-      <div>${fps} FPS</div>
-      <div style="opacity:0.54;font-size:10px">DPR ${currentPixelRatio.toFixed(2)}</div>
-      <div style="opacity:0.54;font-size:10px">DIST ${distance.toFixed(2)}</div>
-      <div style="opacity:0.54;font-size:10px">REDSHIFT z=${redshift}</div>
+      <div style="display:grid;grid-template-columns:repeat(5,auto);gap:22px;align-items:end">
+        <div><div style="font-size:9px;opacity:.58">FPS</div><div>${fps} HZ</div></div>
+        <div><div style="font-size:9px;opacity:.58">QUALITY</div><div>${params.quality.toFixed(2)}</div></div>
+        <div><div style="font-size:9px;opacity:.58">HORIZON</div><div>${(horizon / 0.16).toFixed(2)} R_S</div></div>
+        <div><div style="font-size:9px;opacity:.58">REDSHIFT</div><div>z=${redshift}</div></div>
+        <div><div style="font-size:9px;opacity:.58">DILATION</div><div>${dilation}x</div></div>
+      </div>
+      <div style="opacity:.38;font-size:10px;margin-top:5px">CAMERA R=${distance.toFixed(2)} / DPR ${currentPixelRatio.toFixed(2)}</div>
     `
     frames = 0
     lastFps = now
