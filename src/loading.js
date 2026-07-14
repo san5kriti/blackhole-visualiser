@@ -1,7 +1,7 @@
 export function createLoadingScreen() {
   return new Promise((resolve) => {
 
-    // inject keyframes
+
     const styleEl = document.createElement('style')
     styleEl.textContent = `
       @keyframes scan {
@@ -55,7 +55,6 @@ export function createLoadingScreen() {
     `
     document.body.appendChild(overlay)
 
-    // ---- TWINKLING STARFIELD ----
     const starsBg = document.createElement('canvas')
     starsBg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%'
     starsBg.width = window.innerWidth
@@ -89,7 +88,7 @@ export function createLoadingScreen() {
     }
     requestAnimationFrame(drawStars)
 
-    // ---- HORIZON GLOW ----
+
     const horizonGlow = document.createElement('div')
     horizonGlow.style.cssText = `
       position: absolute;
@@ -101,7 +100,7 @@ export function createLoadingScreen() {
     `
     overlay.appendChild(horizonGlow)
 
-    // ---- SCAN LINE ----
+
     const scanLine = document.createElement('div')
     scanLine.style.cssText = `
       position: absolute;
@@ -113,7 +112,7 @@ export function createLoadingScreen() {
     `
     overlay.appendChild(scanLine)
 
-    // ---- CORNER BRACKETS ----
+
     ;[
       'top:20px;left:20px;border-top:1px solid rgba(255,160,94,0.5);border-left:1px solid rgba(255,160,94,0.5)',
       'top:20px;right:20px;border-top:1px solid rgba(255,160,94,0.5);border-right:1px solid rgba(255,160,94,0.5)',
@@ -126,7 +125,7 @@ export function createLoadingScreen() {
       setTimeout(() => { el.style.opacity = '1' }, 150)
     })
 
-    // ---- TOP RULE ----
+
     const topRule = document.createElement('div')
     topRule.style.cssText = `position:absolute;top:56px;left:20px;right:20px;height:1px;background:linear-gradient(90deg,rgba(255,160,94,0.35),rgba(255,160,94,0.05));pointer-events:none;z-index:3;transform:scaleX(0);transform-origin:left;transition:transform 1.2s ease 0.3s`
     overlay.appendChild(topRule)
@@ -137,21 +136,21 @@ export function createLoadingScreen() {
     overlay.appendChild(bottomRule)
     setTimeout(() => { bottomRule.style.transform = 'scaleX(1)' }, 50)
 
-    // ---- TOP LEFT COORDS ----
+
     const coords = document.createElement('div')
     coords.style.cssText = `position:absolute;top:26px;left:28px;font-size:9px;letter-spacing:0.22em;color:rgba(255,160,94,0.45);pointer-events:none;z-index:4;opacity:0;transition:opacity 0.6s ease 0.8s`
     coords.textContent = 'LAT +00°00\'00"  ·  LON +00°00\'00"  ·  ALT ∞'
     overlay.appendChild(coords)
     setTimeout(() => { coords.style.opacity = '1' }, 50)
 
-    // ---- TOP RIGHT STATUS ----
+
     const status = document.createElement('div')
     status.style.cssText = `position:absolute;top:26px;right:28px;font-size:9px;letter-spacing:0.2em;color:rgba(255,160,94,0.45);pointer-events:none;z-index:4;text-align:right;opacity:0;transition:opacity 0.6s ease 0.8s`
     status.innerHTML = 'SYSTEM STATUS: <span style="color:rgba(100,255,150,0.75)">NOMINAL</span>'
     overlay.appendChild(status)
     setTimeout(() => { status.style.opacity = '1' }, 50)
 
-    // ---- ANIMATED BLACK HOLE ICON ----
+
     const iconWrap = document.createElement('div')
     iconWrap.style.cssText = `position:absolute;right:10vw;top:50%;transform:translateY(-50%);width:160px;height:160px;pointer-events:none;z-index:4;opacity:0;transition:opacity 1s ease 1.5s`
     overlay.appendChild(iconWrap)
@@ -194,26 +193,26 @@ export function createLoadingScreen() {
       </svg>
     `
 
-    // ---- ATTRIBUTION BOTTOM LEFT ----
+
     const attribution = document.createElement('div')
     attribution.style.cssText = `position:absolute;bottom:26px;left:28px;font-size:9px;letter-spacing:0.22em;color:rgba(255,211,166,0.28);pointer-events:none;z-index:4;line-height:1.8;opacity:0;transition:opacity 0.8s ease 1.2s`
     attribution.innerHTML = `CREATED BY SANSKRITI SHELKE &nbsp;·&nbsp; MSC ADVANCED COMPUTING · DURHAM UNIVERSITY · 2026`
     overlay.appendChild(attribution)
     setTimeout(() => { attribution.style.opacity = '1' }, 50)
 
-    // ---- BOTTOM RIGHT ----
+
     const bottomCoords = document.createElement('div')
     bottomCoords.style.cssText = `position:absolute;bottom:26px;right:28px;font-size:9px;letter-spacing:0.2em;color:rgba(255,160,94,0.3);pointer-events:none;z-index:4;text-align:right;opacity:0;transition:opacity 0.8s ease 1.2s`
     bottomCoords.textContent = 'BOYER-LINDQUIST COORDS · M=1 UNITS'
     overlay.appendChild(bottomCoords)
     setTimeout(() => { bottomCoords.style.opacity = '1' }, 50)
 
-    // ---- MAIN CONTENT ----
+
     const content = document.createElement('div')
     content.style.cssText = 'position:relative;z-index:5;max-width:580px;width:100%'
     overlay.appendChild(content)
 
-    // progress bar
+
     const progressWrap = document.createElement('div')
     progressWrap.style.cssText = `width:100%;height:1px;background:rgba(255,160,94,0.1);margin-top:22px;overflow:hidden`
     const progressBar = document.createElement('div')
@@ -253,7 +252,7 @@ export function createLoadingScreen() {
 
     setTimeout(() => { content.appendChild(progressWrap) }, 620)
 
-    // ---- ENTER BUTTON ----
+
     const enterBtn = document.createElement('button')
     enterBtn.textContent = '[ ENTER SIMULATION ]'
     enterBtn.style.cssText = `
