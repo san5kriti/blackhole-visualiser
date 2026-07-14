@@ -374,7 +374,7 @@ const vignetteEffect = new VignetteEffect({ darkness: 0.52, offset: 0.18 })
 const composer = new EffectComposer(renderer)
 composer.addPass(new RenderPass(scene, camera))
 composer.addPass(new EffectPass(camera, bloomEffect, toneMappingEffect, vignetteEffect))
-// ---- INJECT STYLES ----
+
 const styleEl = document.createElement('style')
 styleEl.textContent = `
   @keyframes flicker {
@@ -441,7 +441,7 @@ styleEl.textContent = `
 `
 document.head.appendChild(styleEl)
 
-// ---- HUD TOP LEFT ----
+
 const hud = document.createElement('div')
 hud.style.cssText = `
   position: fixed;
@@ -459,7 +459,7 @@ hud.style.cssText = `
 `
 document.body.appendChild(hud)
 
-// ---- FPS TOP RIGHT ----
+
 const fpsDiv = document.createElement('div')
 fpsDiv.style.cssText = `
   position: fixed;
@@ -476,7 +476,7 @@ fpsDiv.style.cssText = `
 `
 document.body.appendChild(fpsDiv)
 
-// ---- SCIENCE BUTTON TOP RIGHT ----
+
 const scienceBtn = document.createElement('button')
 scienceBtn.className = 'sci-btn'
 scienceBtn.textContent = '◈ SCIENTIFIC READOUT'
@@ -488,7 +488,7 @@ scienceBtn.style.cssText += `
 `
 document.body.appendChild(scienceBtn)
 
-// ---- SCIENCE POPUP ----
+
 let scienceOpen = false
 const sciencePopup = document.createElement('div')
 sciencePopup.style.cssText = `
@@ -533,7 +533,7 @@ scienceBtn.addEventListener('click', () => {
   }
 })
 
-// ---- BOTTOM BAR ----
+
 const bottomBar = document.createElement('div')
 bottomBar.style.cssText = `
   position: fixed;
@@ -574,7 +574,7 @@ bottomBar.appendChild(warningText)
 bottomBar.appendChild(attributionText)
 document.body.appendChild(bottomBar)
 
-// ---- SOCIAL LINKS ----
+
 const socialsPanel = document.createElement('div')
 socialsPanel.style.cssText = `
   position: fixed;
@@ -601,7 +601,7 @@ socialLinks.forEach(({ label, href }) => {
 })
 document.body.appendChild(socialsPanel)
 
-// ---- PHYSICS ----
+
 function getPhysics(rs) {
   const c = 299792458, G = 6.6743e-11, hbar = 1.054571817e-34
   const k = 1.380649e-23, solarMass = 1.98847e30
@@ -654,7 +654,7 @@ function updateSciencePopup(p) {
   `
 }
 
-// ---- GUI ----
+
 const params = {
   mass: rayMarchMaterial.uniforms.rs.value,
   spin: rayMarchMaterial.uniforms.spin.value,
@@ -712,7 +712,7 @@ gui.add(params, 'bloom', 0, 4, 0.05).name('Bloom').onChange(v => { bloomEffect.i
 gui.add(params, 'exposure', 0.4, 2.4, 0.02).name('Exposure').onChange(v => { rayMarchMaterial.uniforms.exposure.value = v })
 gui.add(params, 'autoRotate').name('Drift camera').onChange(v => { controls.autoRotate = v })
 
-// ---- UPDATE HUD ----
+
 function updateHUD() {
   const p = getPhysics(rayMarchMaterial.uniforms.rs.value)
   hud.innerHTML = `
@@ -729,7 +729,7 @@ function updateHUD() {
 
 updateHUD()
 
-// ---- RESIZE + ANIMATE ----
+
 function resize() {
   viewport.set(window.innerWidth, window.innerHeight)
   camera.aspect = viewport.x / viewport.y
